@@ -8,7 +8,7 @@ public typealias ErrorTransform = (Data, StatusCode) -> API.Error
 public typealias ResponseTransform<T> = (Data, JSONDecoder) throws -> T
 
 //MARK: Request signatures
-public typealias RegisterRequest = (UserRegistrationCandidate) -> AnyPublisher<Token, API.Error>
+public typealias RegisterRequest = (UserRegistrationCandidate) -> AnyPublisher<String, API.Error>
 public typealias LoginRequest = (UserLoginCandidate) -> AnyPublisher<Token, API.Error>
 public typealias TestRequest = () -> AnyPublisher<String, API.Error>
 
@@ -22,7 +22,6 @@ public struct API {
         register: @escaping RegisterRequest
     ) {
         self.login = login
-        self.register = register
     }
     
     //MARK: Endpoints
@@ -40,7 +39,8 @@ public struct API {
             .eraseToAnyPublisher()
     }
     
-    public var register: RegisterRequest = { registrationCandidate in
+    public func register(registrationCandidate: UserRegistrationCandidate) -> AnyPublisher<String, API.Error> {
+        
         let request = URLRequest
             .post(.register)
             .with(data: try? JSONEncoder().encode(registrationCandidate))
@@ -56,12 +56,17 @@ public struct API {
             return .visible(message: serverError.reason)
         }
         
-        return client.run(request, errorTransform: errorTransform)
-            .map(\.value)
+        return API.client.run(request, errorTransform: errorTransform)
+            .tryMap(saveTokenOrThrow)
+            .mapError(silentErrorUnlessSpecified)
+            .flatMap { _ in
+                return test()
+            }
             .eraseToAnyPublisher()
     }
     
     public func test(tokenHandler: TokenHandler = TokenHandler(), mock: TestRequest? = nil) -> AnyPublisher<String, API.Error> {
+        
         if let mock = mock {
             return mock()
         }
@@ -94,6 +99,7 @@ public extension API {
         case silent
         case missingToken
         case parse
+        case couldNotStoreToken
     }
 }
 
@@ -104,8 +110,8 @@ public struct ServerError: Decodable {
 public extension API {
     static var mock: API {
         API(
-            login: { x in Just(Token(value: "")).setFailureType(to: Error.self).eraseToAnyPublisher() },
-            register: { x in Just(Token(value: "")).setFailureType(to: Error.self).eraseToAnyPublisher() }
+            login: { _ in Just(Token(value: "")).setFailureType(to: Error.self).eraseToAnyPublisher() },
+            register: { _ in Just("").setFailureType(to: Error.self).eraseToAnyPublisher() }
         )
     }
 }
@@ -225,16 +231,28 @@ fileprivate struct Client {
                     
                     return Response(value: value, response: result.response)
                 }
-                .mapError { error -> API.Error in
-                    guard let error = error as? API.Error else {
-                        return .silent
-                    }
-                    
-                    return error
-                }
+                .mapError(silentErrorUnlessSpecified)
                 .receive(on: DispatchQueue.main)
                 .eraseToAnyPublisher()
         }
+}
+
+fileprivate func silentErrorUnlessSpecified(_ error: Swift.Error) -> API.Error {
+    guard let error = error as? API.Error else {
+        return .silent
+    }
+    
+    return error
+}
+
+fileprivate func saveTokenOrThrow(_ response: (Client.Response<Token>)) throws -> Token {
+    guard
+        case .success(_) = TokenHandler().saveToken(response.value)
+    else {
+        throw API.Error.couldNotStoreToken
+    }
+    
+    return response.value
 }
 
 //TODO: Move to Scrap data models
