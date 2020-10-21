@@ -86,28 +86,6 @@ public struct API {
             .map(\.value)
             .eraseToAnyPublisher()
     }
-    
-//    public var test: TestRequest = {
-//        guard
-////            let token = Token(value: "")
-//            let request = URLRequest.get(.test).tokenAuthorized(token: Token(value: ""))
-//        else {
-//            return Fail<String, API.Error>(error: .missingToken)
-//                .eraseToAnyPublisher()
-//        }
-//
-//        let responseTransform: ResponseTransform<String> = { data, _ in
-//            guard let value = String(data: data, encoding: .utf8) else {
-//                throw API.Error.silent
-//            }
-//
-//            return value
-//        }
-//
-//        return client.run(request, responseTransform: responseTransform)
-//            .map(\.value)
-//            .eraseToAnyPublisher()
-//    }
 }
 
 public extension API {
