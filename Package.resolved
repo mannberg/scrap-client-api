@@ -1,0 +1,16 @@
+{
+  "object": {
+    "pins": [
+      {
+        "package": "scrap-data-models",
+        "repositoryURL": "https://github.com/mannberg/scrap-data-models",
+        "state": {
+          "branch": null,
+          "revision": "3fcf54ac430fc4a3c20fb50c0cb31a269b9ccdd9",
+          "version": "1.0.0"
+        }
+      }
+    ]
+  },
+  "version": 1
+}
