@@ -23,6 +23,8 @@ public struct API {
     ) {
         self.login = login
     }
+    //TODO: Perhaps API should also have a SideEffects struct
+    public var hasToken = CurrentValueSubject<Bool, Never>(TokenHandler().tokenValue() != nil)
     
     //MARK: Endpoints
     public var login: LoginRequest = { loginCandidate in
@@ -90,6 +92,23 @@ public struct API {
         return API.client.run(request, responseTransform: responseTransform)
             .map(\.value)
             .eraseToAnyPublisher()
+    }
+    
+    public func clearToken() {
+        //TODO: Verify the result of this action
+        TokenHandler().clearToken()
+        self.hasToken.send(TokenHandler().tokenValue() != nil)
+    }
+    
+    fileprivate func saveTokenOrThrow(_ response: (Client.Response<Token>)) throws -> Token {
+        guard
+            case .success(_) = TokenHandler().saveToken(response.value)
+        else {
+            throw API.Error.couldNotStoreToken
+        }
+        self.hasToken.send(TokenHandler().tokenValue() != nil)
+        
+        return response.value
     }
 }
 
@@ -243,16 +262,6 @@ fileprivate func silentErrorUnlessSpecified(_ error: Swift.Error) -> API.Error {
     }
     
     return error
-}
-
-fileprivate func saveTokenOrThrow(_ response: (Client.Response<Token>)) throws -> Token {
-    guard
-        case .success(_) = TokenHandler().saveToken(response.value)
-    else {
-        throw API.Error.couldNotStoreToken
-    }
-    
-    return response.value
 }
 
 //TODO: Move to Scrap data models
