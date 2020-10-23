@@ -48,6 +48,7 @@ public struct API {
             .post(.register)
             .with(data: try? JSONEncoder().encode(registrationCandidate))
         
+        //TODO: Perhaps use callAsFunction to be able to have static vars
         let errorTransform: ErrorTransform = { data, statusCode in
             guard
                 [400, 409].map({ $0 == statusCode }).contains(true),
@@ -115,11 +116,14 @@ public struct API {
 
 public extension API {
     enum Error: Swift.Error {
-        case visible(message: String)
-        case silent
-        case missingToken
-        case parse
         case couldNotStoreToken
+        case missingToken
+        case noNetwork
+        case parse
+        case serverUnreachable
+        case silent
+        case unspecifiedURLError
+        case visible(message: String)
     }
 }
 
@@ -232,10 +236,12 @@ fileprivate struct Client {
         _ request: URLRequest,
         errorTransform: @escaping ErrorTransform = { _, _ in .silent },
         responseTransform: @escaping ResponseTransform<T> = { data, decoder in try decoder.decode(T.self, from: data) },
+        urlErrorTransform: @escaping (URLError) -> API.Error = standardURLErrorHandler,
         decoder: JSONDecoder = JSONDecoder()
     ) -> AnyPublisher<Response<T>, API.Error> {
             return URLSession.shared
                 .dataTaskPublisher(for: request)
+                .mapError (urlErrorTransform)
                 .tryMap { result -> Response<T> in
                     
                     guard let httpURLResponse = result.response as? HTTPURLResponse else {
@@ -263,6 +269,16 @@ fileprivate func silentErrorUnlessSpecified(_ error: Swift.Error) -> API.Error {
     }
     
     return error
+}
+
+fileprivate func standardURLErrorHandler(_ error: URLError) -> API.Error {
+    if error.errorCode == NSURLErrorNotConnectedToInternet {
+        return .noNetwork
+    } else if error.errorCode == NSURLErrorCannotConnectToHost {
+        return .serverUnreachable
+    }
+    
+    return .unspecifiedURLError
 }
 
 //TODO: Move to Scrap data models
