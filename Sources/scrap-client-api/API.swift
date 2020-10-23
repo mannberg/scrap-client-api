@@ -21,13 +21,13 @@ public struct API {
         login: @escaping LoginRequest,
         register: @escaping RegisterRequest
     ) {
-        self.login = login
+        
     }
     //TODO: Perhaps API should also have a SideEffects struct
     public var hasToken = CurrentValueSubject<Bool, Never>(TokenHandler().tokenValue() != nil)
     
     //MARK: Endpoints
-    public var login: LoginRequest = { loginCandidate in
+    public func login(loginCandidate: UserLoginCandidate) -> AnyPublisher<Token, API.Error> {
         let request = URLRequest
             .post(.login)
             .basicAuthorized(forUser: loginCandidate)
@@ -36,8 +36,9 @@ public struct API {
             return .visible(message: "Dang!")
         }
         
-        return client.run(request, errorTransform: errorTransform)
-            .map(\.value)
+        return API.client.run(request, errorTransform: errorTransform)
+            .tryMap(saveTokenOrThrow)
+            .mapError(silentErrorUnlessSpecified)
             .eraseToAnyPublisher()
     }
     
