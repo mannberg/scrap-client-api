@@ -33,7 +33,7 @@ public struct API {
             .basicAuthorized(forUser: loginCandidate)
         
         let errorTransform: ErrorTransform = { data, statusCode in
-            return .visible(message: "Dang!")
+            return .server(message: "Dang!")
         }
         
         return API.client.run(request, errorTransform: errorTransform)
@@ -54,10 +54,10 @@ public struct API {
                 [400, 409].map({ $0 == statusCode }).contains(true),
                 let serverError = try? JSONDecoder().decode(ServerError.self, from: data)
             else {
-                return .visible(message: "Some generic error title")
+                return .server(message: "Some generic error title")
             }
             
-            return .visible(message: serverError.reason)
+            return .server(message: serverError.reason)
         }
         
         return API.client.run(request, errorTransform: errorTransform)
@@ -120,10 +120,10 @@ public extension API {
         case missingToken
         case noNetwork
         case parse
+        case server(message: String)
         case serverUnreachable
         case silent
         case unspecifiedURLError
-        case visible(message: String)
     }
 }
 
@@ -236,15 +236,15 @@ fileprivate struct Client {
         _ request: URLRequest,
         errorTransform: @escaping ErrorTransform = { _, _ in .silent },
         responseTransform: @escaping ResponseTransform<T> = { data, decoder in try decoder.decode(T.self, from: data) },
-        urlErrorTransform: @escaping (URLError) -> API.Error = standardURLErrorHandler,
         decoder: JSONDecoder = JSONDecoder()
     ) -> AnyPublisher<Response<T>, API.Error> {
             return URLSession.shared
                 .dataTaskPublisher(for: request)
-                .mapError (urlErrorTransform)
+                .mapError (standardURLErrorHandler )
                 .tryMap { result -> Response<T> in
                     
                     guard let httpURLResponse = result.response as? HTTPURLResponse else {
+                        //TODO: Is this correct?
                         throw API.Error.silent
                     }
 
